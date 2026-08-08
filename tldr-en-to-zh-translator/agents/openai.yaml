@@ -1,0 +1,4 @@
+interface:
+  display_name: "tldr 中文翻译贡献"
+  short_description: "将缺失的 tldr 页面翻译为简体中文并准备 PR"
+  default_prompt: default_prompt: "使用 $tldr-en-to-zh-translator 为我指定的一个或多个 tldr 命令补充简体中文翻译。"
