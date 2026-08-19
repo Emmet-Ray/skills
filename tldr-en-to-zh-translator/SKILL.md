@@ -94,6 +94,7 @@ Read [references/zh-translation-rules.md](references/zh-translation-rules.md) co
 
 Apply these non-negotiable boundaries:
 
+- Before drafting each page, search `pages.zh` for existing pages in the same command family and inspect the closest sibling commands. Reuse established translations for shared terminology, recurring descriptions, and placeholders when they fit the English source. For example, if `docker compose stop` and `docker compose down` are missing but `docker compose up` exists, use the latter as a wording reference.
 - Mirror each current English page’s structure, meaning, example count, and example order.
 - Do not add, remove, merge, split, or reorder examples.
 - Translate natural-language descriptions, standard phrases, and translatable placeholders.
@@ -101,7 +102,7 @@ Apply these non-negotiable boundaries:
 - For an alias page, use the repository’s `scripts/set-alias-page.py` with locale `zh`, then verify the result against the current template.
 - Finish every page in the batch before moving to validation.
 
-For uncertain terminology or multiple reasonable expressions, use repository context and existing related `pages.zh` pages to choose the best draft. Record the term, chosen expression, alternatives, and reason. Do not repeatedly interrupt the user. Pause only if the English meaning cannot be understood reliably.
+Treat sibling pages as wording references only: the current English source remains authoritative for content, structure, and command behavior. For uncertain terminology or multiple reasonable expressions, use repository context and existing related `pages.zh` pages to choose the best draft. Record the term, chosen expression, alternatives, and reason. Do not repeatedly interrupt the user. Pause only if the English meaning cannot be understood reliably.
 
 Report the created drafts, uncertainty list, and `TRANSLATED`.
 

@@ -83,7 +83,8 @@
 - 页面包含子命令说明：读取 `contributing-guides/translation-templates/subcommand-mention.md` 的 `zh` 条目。
 - 页面包含 See also：读取 `contributing-guides/translation-templates/see-also-mentions.md` 的 `zh` 条目。
 - 页面属于 Windows 或 PowerShell：读取英文和中文版 style guide 中对应的 Windows 或 PowerShell 规则。
-- 遇到不确定术语或表达：搜索同一命令族或相似的现有 `pages.zh` 页面。
+- 翻译每个页面前：搜索同一命令族的现有 `pages.zh` 页面；存在时，读取最接近的同类或同级子命令页面作为措辞参考。
+- 遇到不确定术语或表达：继续搜索其他相似的现有 `pages.zh` 页面。
 - 需要辅助理解中文规范：读取 `contributing-guides/style-guide.zh.md` 的对应章节。
 
 只读取适用于当前页面的条件资料和其中的简体中文内容，不加载无关页面类型或其他语言条目。
@@ -176,8 +177,9 @@
 
 ## 术语和不确定内容
 
-- 优先参考当前仓库中同一命令族或相似 `pages.zh` 页面的用词。
-- 现有中文页面只作为表达参考，不能覆盖当前项目规范。
+- 在起草每个页面前，主动查找当前仓库中同一命令族的现有 `pages.zh` 页面，不要只在遇到不确定表达时才查找。
+- 优先沿用同类页面中适用于当前英文源页面的共享术语、重复描述和占位符译法。例如，缺少 `docker compose stop` 和 `docker compose down` 的中文页，但已有 `docker compose up` 时，参考后者对 Docker Compose 相关措辞的翻译。
+- 同类中文页面只作为措辞一致性参考；当前英文源页面仍决定内容、结构和命令行为。不要复制其他子命令特有的语义，也不能让现有页面覆盖当前项目规范。
 - 遇到多种合理表达时，选择与上下文和现有页面最一致的最佳初稿。
 - 记录所有不确定术语、表达和选择理由，在“用户审核与迭代”阶段集中提示用户。
 - 除非无法确定英文原意、因而无法可靠继续，否则不在翻译阶段频繁暂停询问用户。
