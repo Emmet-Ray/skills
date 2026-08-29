@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve and validate missing Simplified Chinese tldr translation batches."""
+"""Resolve and validate Simplified Chinese tldr page maintenance batches."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 PLACEHOLDER_RE = re.compile(r"\{\{(.*?)\}\}")
 URL_RE = re.compile(r"https?://[^\s>`]+")
 TRAILING_WHITESPACE_RE = re.compile(r"[ \t]+$")
+OPERATIONS = frozenset({"create", "sync", "revise"})
 
 
 class ValidationError(RuntimeError):
@@ -32,6 +33,13 @@ class Check:
     source: str | None = None
     target: str | None = None
     line: int | None = None
+
+
+@dataclass(frozen=True)
+class Pair:
+    operation: str
+    source: str
+    target: str
 
 
 def run_git(
@@ -107,10 +115,8 @@ def resolve_batch(repo: Path, ref: str, commands: list[str]) -> dict[str, Any]:
             status = "missing_source"
         elif len(sources) > 1:
             status = "ambiguous_source"
-        elif candidates[0]["target_exists"]:
-            status = "translation_exists"
         else:
-            status = "ready"
+            status = "resolved"
 
         results.append(
             {
@@ -121,24 +127,35 @@ def resolve_batch(repo: Path, ref: str, commands: list[str]) -> dict[str, Any]:
             }
         )
 
-    ready = all(item["status"] == "ready" for item in results)
+    resolved = all(item["status"] == "resolved" for item in results)
     return {
-        "ok": ready,
+        "ok": resolved,
         "ref": ref,
         "command_count": len(commands),
         "commands": results,
     }
 
 
-def parse_pair(value: str) -> tuple[str, str]:
-    if "=" not in value:
-        raise ValidationError(f"invalid --pair {value!r}; expected SOURCE=TARGET")
-    source, target = value.split("=", 1)
+def parse_pair(value: str) -> Pair:
+    if ":" not in value or "=" not in value:
+        raise ValidationError(
+            f"invalid --pair {value!r}; expected OPERATION:SOURCE=TARGET"
+        )
+    operation, mapping = value.split(":", 1)
+    operation = operation.strip().lower()
+    if operation not in OPERATIONS:
+        allowed = ", ".join(sorted(OPERATIONS))
+        raise ValidationError(
+            f"invalid operation {operation!r}; expected one of: {allowed}"
+        )
+    source, target = mapping.split("=", 1)
     source = source.strip()
     target = target.strip()
     if not source or not target:
-        raise ValidationError(f"invalid --pair {value!r}; expected SOURCE=TARGET")
-    return source, target
+        raise ValidationError(
+            f"invalid --pair {value!r}; expected OPERATION:SOURCE=TARGET"
+        )
+    return Pair(operation, source, target)
 
 
 def safe_path(repo: Path, relative: str) -> Path:
@@ -216,8 +233,9 @@ def add_check(
     checks.append(Check(code, ok, message, source, target, line))
 
 
-def validate_pair(repo: Path, source: str, target: str) -> list[Check]:
+def validate_pair(repo: Path, pair: Pair) -> list[Check]:
     checks: list[Check] = []
+    operation, source, target = pair.operation, pair.source, pair.target
     source_path = safe_path(repo, source)
     target_path = safe_path(repo, target)
     expected_target = (
@@ -255,13 +273,25 @@ def validate_pair(repo: Path, source: str, target: str) -> list[Check]:
     tracked = (
         run_git(repo, "cat-file", "-e", f"HEAD:{target}", check=False).returncode == 0
     )
+    expected_tracked = operation != "create"
+    state_ok = tracked == expected_tracked
+    if operation == "create":
+        state_message = (
+            "create target is new relative to HEAD"
+            if state_ok
+            else "create target already exists in HEAD"
+        )
+    else:
+        state_message = (
+            f"{operation} target exists in HEAD"
+            if state_ok
+            else f"{operation} target does not exist in HEAD"
+        )
     add_check(
         checks,
-        "target_is_new",
-        not tracked,
-        "target is new relative to HEAD"
-        if not tracked
-        else "target already exists in HEAD",
+        "operation_target_state",
+        state_ok,
+        state_message,
         source,
         target,
     )
@@ -417,8 +447,18 @@ def porcelain_changes(repo: Path) -> list[tuple[str, str]]:
     return changes
 
 
-def validate_scope(repo: Path, expected: set[str]) -> list[Check]:
+def allowed_worktree_statuses(operation: str | None) -> set[str]:
+    if operation == "create":
+        return {"??", "A ", "AM"}
+    if operation in {"sync", "revise"}:
+        return {" M", "M ", "MM"}
+    return set()
+
+
+def validate_scope(repo: Path, pairs: list[Pair]) -> list[Check]:
     checks: list[Check] = []
+    expected_operations = {pair.target: pair.operation for pair in pairs}
+    expected = set(expected_operations)
     changes = porcelain_changes(repo)
     actual = {path for _, path in changes}
     add_check(
@@ -430,38 +470,39 @@ def validate_scope(repo: Path, expected: set[str]) -> list[Check]:
         else f"expected {sorted(expected)}, got {sorted(actual)}",
     )
     for status, path in changes:
-        allowed = path in expected and status in {"??", "A ", "AM"}
+        operation = expected_operations.get(path)
+        allowed = status in allowed_worktree_statuses(operation)
         add_check(
             checks,
             "worktree_change_type",
             allowed,
-            f"{status} {path} is an expected new target"
+            f"{status} {path} matches {operation}"
             if allowed
-            else f"unexpected status {status} for {path}",
+            else f"status {status} does not match operation {operation or '<none>'}",
             target=path,
         )
     return checks
 
 
 def validation_report(
-    repo: Path, pairs: list[tuple[str, str]], check_scope: bool
+    repo: Path, pairs: list[Pair], check_scope: bool
 ) -> dict[str, Any]:
     checks: list[Check] = []
     targets: set[str] = set()
-    for source, target in pairs:
-        if target in targets:
+    for pair in pairs:
+        if pair.target in targets:
             add_check(
                 checks,
                 "duplicate_target",
                 False,
-                f"target appears more than once: {target}",
-                source,
-                target,
+                f"target appears more than once: {pair.target}",
+                pair.source,
+                pair.target,
             )
-        targets.add(target)
-        checks.extend(validate_pair(repo, source, target))
+        targets.add(pair.target)
+        checks.extend(validate_pair(repo, pair))
     if check_scope:
-        checks.extend(validate_scope(repo, targets))
+        checks.extend(validate_scope(repo, pairs))
     failures = [check for check in checks if not check.ok]
     return {
         "ok": not failures,
@@ -514,7 +555,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--pair",
         action="append",
         required=True,
-        help="SOURCE=TARGET; repeat for the complete batch",
+        help="OPERATION:SOURCE=TARGET; repeat for the complete batch",
     )
     validate.add_argument("--check-scope", action="store_true")
     validate.add_argument("--json", action="store_true", dest="output_json")

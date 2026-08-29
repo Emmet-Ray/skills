@@ -1,0 +1,4 @@
+interface:
+  display_name: "tldr 中文页面维护"
+  short_description: "创建、同步或修订 tldr 简体中文页面并准备 PR"
+  default_prompt: "使用 $tldr-zh-page-maintainer 维护我指定的一个或多个 tldr 简体中文页面。"
