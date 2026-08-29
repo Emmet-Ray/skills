@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect and validate batches of new English tldr pages."""
+"""Inspect and validate English tldr page maintenance batches."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ PAGE_PATH_RE = re.compile(r"^pages/([^/]+)/([^/]+)\.md$")
 TITLE_RE = re.compile(r"^# (.+)$")
 FULL_COMMAND_RE = re.compile(r"^`[^`]+`$")
 TRAILING_WHITESPACE_RE = re.compile(r"[ \t]+$")
+OPERATIONS = frozenset({"create", "update", "revise"})
 
 
 class ValidationError(RuntimeError):
@@ -30,6 +31,12 @@ class Check:
     message: str
     page: str | None = None
     line: int | None = None
+
+
+@dataclass(frozen=True)
+class PageSpec:
+    operation: str
+    path: str
 
 
 def run_git(
@@ -111,6 +118,22 @@ def safe_path(repo: Path, relative: str) -> Path:
     return path
 
 
+def parse_page_spec(value: str) -> PageSpec:
+    if ":" not in value:
+        raise ValidationError(f"invalid --page {value!r}; expected OPERATION:PAGE")
+    operation, path = value.split(":", 1)
+    operation = operation.strip().lower()
+    path = path.strip()
+    if operation not in OPERATIONS:
+        allowed = ", ".join(sorted(OPERATIONS))
+        raise ValidationError(
+            f"invalid operation {operation!r}; expected one of: {allowed}"
+        )
+    if not path:
+        raise ValidationError(f"invalid --page {value!r}; expected OPERATION:PAGE")
+    return PageSpec(operation, path)
+
+
 def read_page(path: Path) -> tuple[bytes, str, list[str]]:
     try:
         raw = path.read_bytes()
@@ -177,8 +200,9 @@ def valid_structure(kinds: list[str]) -> bool:
     return True
 
 
-def validate_page(repo: Path, ref: str, page: str) -> list[Check]:
+def validate_page(repo: Path, ref: str, spec: PageSpec) -> list[Check]:
     checks: list[Check] = []
+    operation, page = spec.operation, spec.path
     match = PAGE_PATH_RE.fullmatch(page)
     add_check(
         checks,
@@ -212,12 +236,26 @@ def validate_page(repo: Path, ref: str, page: str) -> list[Check]:
         else f"platform directory pages/{platform} does not exist in {ref}",
         page,
     )
-    is_new = not tracked_at_ref(repo, ref, page)
+    tracked = tracked_at_ref(repo, ref, page)
+    expected_tracked = operation != "create"
+    state_ok = tracked == expected_tracked
+    if operation == "create":
+        state_message = (
+            f"create target is absent from {ref}"
+            if state_ok
+            else f"create target already exists in {ref}"
+        )
+    else:
+        state_message = (
+            f"{operation} target exists in {ref}"
+            if state_ok
+            else f"{operation} target is absent from {ref}"
+        )
     add_check(
         checks,
-        "page_is_new",
-        is_new,
-        f"page is absent from {ref}" if is_new else f"page already exists in {ref}",
+        "operation_target_state",
+        state_ok,
+        state_message,
         page,
     )
 
@@ -227,7 +265,7 @@ def validate_page(repo: Path, ref: str, page: str) -> list[Check]:
         checks,
         "page_exists",
         exists,
-        "new page exists in the worktree" if exists else "page is missing",
+        "page exists in the worktree" if exists else "page is missing",
         page,
     )
     if not exists:
@@ -341,49 +379,66 @@ def porcelain_changes(repo: Path) -> list[tuple[str, str]]:
     return changes
 
 
-def validate_scope(repo: Path, expected: set[str]) -> list[Check]:
+def allowed_worktree_statuses(operation: str | None) -> set[str]:
+    if operation == "create":
+        return {"??", "A ", "AM"}
+    if operation in {"update", "revise"}:
+        return {" M", "M ", "MM"}
+    return set()
+
+
+def validate_scope(repo: Path, specs: list[PageSpec]) -> list[Check]:
     checks: list[Check] = []
+    expected_operations = {spec.path: spec.operation for spec in specs}
+    expected = set(expected_operations)
     changes = porcelain_changes(repo)
     actual = {path for _, path in changes}
     add_check(
         checks,
         "worktree_scope",
         actual == expected,
-        "worktree contains exactly the expected new pages"
+        "worktree contains exactly the expected target pages"
         if actual == expected
         else f"expected {sorted(expected)}, got {sorted(actual)}",
     )
     for status, path in changes:
-        allowed = path in expected and status in {"??", "A ", "AM"}
+        operation = expected_operations.get(path)
+        allowed = status in allowed_worktree_statuses(operation)
         add_check(
             checks,
             "worktree_change_type",
             allowed,
-            f"{status} {path} is an expected new page"
+            f"{status} {path} matches {operation}"
             if allowed
-            else f"unexpected status {status} for {path}",
+            else f"status {status} does not match operation {operation or '<none>'}",
             path,
         )
     return checks
 
 
 def validation_report(
-    repo: Path, ref: str, pages: list[str], check_scope: bool
+    repo: Path, ref: str, specs: list[PageSpec], check_scope: bool
 ) -> dict[str, Any]:
     checks: list[Check] = []
     seen: set[str] = set()
-    for page in pages:
-        if page in seen:
-            add_check(checks, "duplicate_page", False, f"page repeated: {page}", page)
-        seen.add(page)
-        checks.extend(validate_page(repo, ref, page))
+    for spec in specs:
+        if spec.path in seen:
+            add_check(
+                checks,
+                "duplicate_page",
+                False,
+                f"page repeated: {spec.path}",
+                spec.path,
+            )
+        seen.add(spec.path)
+        checks.extend(validate_page(repo, ref, spec))
     if check_scope:
-        checks.extend(validate_scope(repo, seen))
+        checks.extend(validate_scope(repo, specs))
     failures = [check for check in checks if not check.ok]
     return {
         "ok": not failures,
         "ref": ref,
-        "page_count": len(pages),
+        "page_count": len(specs),
         "check_count": len(checks),
         "failure_count": len(failures),
         "checks": [asdict(check) for check in checks],
@@ -421,14 +476,14 @@ def build_parser() -> argparse.ArgumentParser:
     inspect.add_argument("--json", action="store_true", dest="output_json")
     inspect.add_argument("commands", nargs="+", help="user-provided command names")
 
-    validate = subparsers.add_parser("validate", help="validate new English pages")
+    validate = subparsers.add_parser("validate", help="validate English page changes")
     validate.add_argument("--repo", required=True, help="repository root")
     validate.add_argument("--ref", required=True, help="fetched official Git ref")
     validate.add_argument(
         "--page",
         action="append",
         required=True,
-        help="new page path; repeat for the complete batch",
+        help="OPERATION:PAGE; repeat for the complete batch",
     )
     validate.add_argument("--check-scope", action="store_true")
     validate.add_argument("--json", action="store_true", dest="output_json")
@@ -446,7 +501,8 @@ def main() -> int:
             else:
                 print_inspection(report)
         else:
-            report = validation_report(repo, args.ref, args.page, args.check_scope)
+            specs = [parse_page_spec(value) for value in args.page]
+            report = validation_report(repo, args.ref, specs, args.check_scope)
             if args.output_json:
                 print(json.dumps(report, ensure_ascii=False, indent=2))
             else:

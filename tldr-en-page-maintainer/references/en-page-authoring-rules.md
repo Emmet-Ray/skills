@@ -1,6 +1,6 @@
-# tldr English Page Authoring Rules
+# tldr English Page Maintenance Rules
 
-This document summarizes the English-page research and authoring decisions that are easy to miss. It routes to the current tldr repository rather than replacing its rules.
+This document summarizes English-page research and editing decisions that are easy to miss. It applies to creating, updating, and revising pages and routes to the current tldr repository rather than replacing its rules. Operation-specific references determine the editing and evidence scope.
 
 ## Authority Order
 
@@ -20,7 +20,7 @@ Never let an existing tldr page override primary evidence about another command'
 
 For every batch, read the current versions of:
 
-- `.github/PULL_REQUEST_TEMPLATE.md` for the new-page limit, checklist, version field, and AI-assisted human-review requirement.
+- `.github/PULL_REQUEST_TEMPLATE.md` for applicable page limits, checklist, version field, and AI-assisted human-review requirement.
 - `CONTRIBUTING.md` sections covering project eligibility, Guidelines, Directory structure, Markdown format, Subcommands, Inclusive language, local testing, PR submission, commit/PR titles, and Name collisions.
 - `contributing-guides/style-guide.md` sections covering General layout, Pages, General writing, Heading, Example descriptions, Example commands, and English-Specific Rules.
 - `scripts/test.sh` and `package.json` to determine the current project-local lint entry points.
@@ -40,7 +40,7 @@ Record:
 - Supported operating systems.
 - Whether the page describes a base command, subcommand, alias, grouped reference, or disambiguation.
 
-Apply the current repository eligibility rule for project age and notability. Prefer dated releases, repository history, package history, or longstanding OS inclusion as evidence. If a young project may qualify as notable, treat notability as a maintainer judgment and ask the user before proceeding rather than asserting it.
+Always establish command identity. Apply the current repository eligibility rule for project age and notability when creating a page or when an update introduces a newly documented command or project. Prefer dated releases, repository history, package history, or longstanding OS inclusion as evidence. If a young project may qualify as notable, treat notability as a maintainer judgment and ask the user before proceeding rather than asserting it.
 
 ## Resolve Page Type, Name, and Platform
 
@@ -59,7 +59,9 @@ Do not create separate subcommand pages merely because the command has subcomman
 
 ## Build an Evidence Record
 
-Create one record per proposed example before drafting. Each record should include:
+For `create`, create one record per proposed example before drafting. For `update`, create records for every new, changed, removed, or behavior-affected claim and example. For `revise`, record enough source context to prove the revised wording preserves existing command meaning; if meaning changes, reclassify the page as `update` before editing.
+
+Each required record should include:
 
 - Intended user task and why it belongs among the page's limited examples.
 - Exact command skeleton, including subcommands, options, positional arguments, redirections, and fixed literals.
@@ -124,14 +126,14 @@ For command families, inspect the closest sibling pages before drafting. Reuse a
 - Follow platform path and PowerShell casing rules.
 - Keep help and version examples in that order at the end when included.
 
-## Authoring Completion Conditions
+## Editing Completion Conditions
 
 A batch is ready for hard validation only when:
 
-- Every target path is resolved and absent from the fetched official ref.
+- Every target path is resolved and its presence or absence matches the assigned operation.
 - Every required base, alias target, grouped reference, or disambiguation dependency is satisfied.
-- Project eligibility and platform placement have evidence.
-- Every syntax and behavior claim has a traceable source.
+- Project eligibility and platform placement have evidence where the operation affects them.
+- Every claim requiring evidence under the assigned operation has a traceable source.
 - The page stays within the current example limit and contains a deliberately prioritized set of examples.
 - All known version differences, unsafe verification gaps, and editorial uncertainties are recorded for human review.
 

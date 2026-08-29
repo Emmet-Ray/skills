@@ -67,12 +67,13 @@ class ValidateBatchTest(unittest.TestCase):
             "`tool subcommand {{value}}`\n",
             encoding="utf-8",
         )
+        spec = validate_batch.PageSpec("create", page)
         report = validate_batch.validation_report(
-            self.repo, self.ref, [page], check_scope=True
+            self.repo, self.ref, [spec], check_scope=True
         )
         self.assertTrue(report["ok"], report)
 
-    def test_validate_rejects_existing_page_and_title_mismatch(self) -> None:
+    def test_validate_rejects_operation_state_mismatch_and_bad_title(self) -> None:
         new_page = "pages/common/wrong-name.md"
         (self.repo / new_page).write_text(
             "# another name\n\n> Description.\n\n- Run it:\n\n`another-name`\n",
@@ -81,11 +82,14 @@ class ValidateBatchTest(unittest.TestCase):
         report = validate_batch.validation_report(
             self.repo,
             self.ref,
-            ["pages/common/existing.md", new_page],
+            [
+                validate_batch.PageSpec("create", "pages/common/existing.md"),
+                validate_batch.PageSpec("create", new_page),
+            ],
             check_scope=False,
         )
         failed_codes = {item["code"] for item in report["checks"] if not item["ok"]}
-        self.assertIn("page_is_new", failed_codes)
+        self.assertIn("operation_target_state", failed_codes)
         self.assertIn("title_filename", failed_codes)
 
     def test_validate_accepts_a_disambiguation_suffix(self) -> None:
@@ -94,10 +98,62 @@ class ValidateBatchTest(unittest.TestCase):
             "# tool\n\n> Description.\n\n- Run it:\n\n`tool`\n",
             encoding="utf-8",
         )
+        spec = validate_batch.PageSpec("create", page)
         report = validate_batch.validation_report(
-            self.repo, self.ref, [page], check_scope=True
+            self.repo, self.ref, [spec], check_scope=True
         )
         self.assertTrue(report["ok"], report)
+
+    def test_validate_accepts_an_updated_tracked_page(self) -> None:
+        page = "pages/common/existing.md"
+        (self.repo / page).write_text(
+            "# existing\n\n> Existing command with current behavior.\n\n"
+            "- Run it:\n\n`existing`\n",
+            encoding="utf-8",
+        )
+        spec = validate_batch.PageSpec("update", page)
+
+        report = validate_batch.validation_report(
+            self.repo, self.ref, [spec], check_scope=True
+        )
+
+        self.assertTrue(report["ok"], report)
+
+    def test_validate_accepts_a_staged_revision(self) -> None:
+        page = "pages/common/existing.md"
+        (self.repo / page).write_text(
+            "# existing\n\n> An existing command.\n\n- Run it:\n\n`existing`\n",
+            encoding="utf-8",
+        )
+        git(self.repo, "add", "--", page)
+        spec = validate_batch.PageSpec("revise", page)
+
+        report = validate_batch.validation_report(
+            self.repo, self.ref, [spec], check_scope=True
+        )
+
+        self.assertTrue(report["ok"], report)
+
+    def test_update_rejects_an_untracked_page(self) -> None:
+        page = "pages/common/new.md"
+        (self.repo / page).write_text(
+            "# new\n\n> New command.\n\n- Run it:\n\n`new`\n",
+            encoding="utf-8",
+        )
+        spec = validate_batch.PageSpec("update", page)
+
+        report = validate_batch.validation_report(
+            self.repo, self.ref, [spec], check_scope=False
+        )
+
+        failed_codes = {item["code"] for item in report["checks"] if not item["ok"]}
+        self.assertIn("operation_target_state", failed_codes)
+
+    def test_page_spec_requires_a_known_operation(self) -> None:
+        with self.assertRaises(validate_batch.ValidationError):
+            validate_batch.parse_page_spec("pages/common/existing.md")
+        with self.assertRaises(validate_batch.ValidationError):
+            validate_batch.parse_page_spec("edit:pages/common/existing.md")
 
     def test_validate_rejects_unknown_platform_and_extra_worktree_change(self) -> None:
         page = "pages/unknown/new.md"
@@ -107,8 +163,9 @@ class ValidateBatchTest(unittest.TestCase):
             encoding="utf-8",
         )
         (self.repo / "extra.txt").write_text("unexpected\n", encoding="utf-8")
+        spec = validate_batch.PageSpec("create", page)
         report = validate_batch.validation_report(
-            self.repo, self.ref, [page], check_scope=True
+            self.repo, self.ref, [spec], check_scope=True
         )
         failed_codes = {item["code"] for item in report["checks"] if not item["ok"]}
         self.assertIn("platform_directory", failed_codes)

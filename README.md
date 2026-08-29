@@ -6,17 +6,19 @@
 
 ### [tldr-en-page-author](tldr-en-page-author/SKILL.md)
 
-为 [tldr-pages项目](https://github.com/tldr-pages/tldr) 补充缺失的英文命令页面的工作流，涵盖补充前检查、搜索官方命令、编写命令页面、页面校验、本地提交、分支推送和 Pull Request 创建全流程。
+维护 [tldr-pages 项目](https://github.com/tldr-pages/tldr)中的英文命令页面，支持创建缺失页面、根据当前命令证据修改更新已有页面，涵盖操作识别、仓库检查、命令研究、内容编辑、确定性校验、人工审核、本地提交、分支推送和PR创建全流程。
 
 使用示例：
 
 ```text
 @tldr-en-page-author 为 git commit 补充英文页面。
+@tldr-en-page-author 根据当前官方文档更新 jq 的英文页面。
+@tldr-en-page-author 润色 fd 英文页面中的命令描述。
 ```
 
 ### [tldr-zh-page-maintainer](tldr-zh-page-maintainer/SKILL.md)
 
-维护 [tldr-pages 项目](https://github.com/tldr-pages/tldr)中的简体中文命令页面，支持创建缺失翻译、与当前英文页面同步，以及修正、重译或润色已有中文页面，涵盖操作识别、编辑前检查、内容编辑、确定性校验、人工审核、本地提交、分支推送和 Pull Request 创建全流程。
+维护 [tldr-pages 项目](https://github.com/tldr-pages/tldr)中的简体中文命令页面，支持创建缺失翻译、与当前英文页面同步，以及修正已有中文页面，涵盖操作识别、编辑前检查、内容编辑、确定性校验、人工审核、本地提交、分支推送和PR创建全流程。
 
 使用示例：
 
