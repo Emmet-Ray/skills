@@ -1,5 +1,5 @@
 ---
-name: tldr-en-page-author
+name: tldr-en-page-maintainer
 description: Maintain English tldr pages, including creating missing pages, updating existing pages from current command evidence, and revising or polishing English content, with eligibility and duplicate checks, evidence-based research, deterministic validation, human review, local commit, fork push, and browser PR handoff. Use when the user provides one or more command names and wants to create or edit English pages in a local tldr-pages/tldr clone. Do not use for translations.
 ---
 
